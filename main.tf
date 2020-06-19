@@ -99,6 +99,7 @@ resource "aws_security_group" "security_group" {
 
 # ec2 instance
 resource "aws_instance" "ec2_instance" {
+  depends_on = [aws_key_pair.key_pair,aws_security_group.security_group]
   ami                    = "ami-0447a12f28fddb066"
   instance_type          = "t2.micro"
   key_name               = var.key_name
@@ -119,6 +120,7 @@ resource "aws_ebs_volume" "ebs_volume" {
 
 # attach ebs volume
 resource "aws_volume_attachment" "attach_volume" {
+  depends_on = [aws_instance.ec2_instance,aws_ebs_volume.ebs_volume]
   device_name = "/dev/sdf"
   volume_id   = aws_ebs_volume.ebs_volume.id
   instance_id = aws_instance.ec2_instance.id
@@ -149,6 +151,7 @@ resource "aws_s3_bucket" "s3_bucket" {
 
 # block bucket public access
 resource "aws_s3_bucket_public_access_block" "s3_block_access" {
+  depends_on = [aws_s3_bucket.s3_bucket]
   bucket = aws_s3_bucket.s3_bucket.id
   block_public_acls   = true
   block_public_policy = true
@@ -169,6 +172,7 @@ comment = "cloudfront distribution identity"
 
 # distribution
 resource "aws_cloudfront_distribution" "distribution" {
+  depends_on = [aws_s3_bucket.s3_bucket,aws_s3_bucket_public_access_block.s3_block_access]
   origin {
     domain_name = aws_s3_bucket.s3_bucket.bucket_regional_domain_name
     origin_id   = local.s3_origin_id
@@ -215,6 +219,7 @@ resource "aws_cloudfront_distribution" "distribution" {
 
 # create s3 policy to allow distribution to read objects
 data "aws_iam_policy_document" "s3_policy" {
+  depends_on = [aws_s3_bucket.s3_bucket,aws_cloudfront_distribution.distribution]
   statement {
     actions   = ["s3:GetObject"]
     resources = ["${aws_s3_bucket.s3_bucket.arn}/*"]
@@ -238,6 +243,7 @@ data "aws_iam_policy_document" "s3_policy" {
 
 # updating bucket policy for distribution
 resource "aws_s3_bucket_policy" "update_s3_policy" {
+  depends_on = [aws_s3_bucket.s3_bucket]
   bucket = aws_s3_bucket.s3_bucket.id
   policy = data.aws_iam_policy_document.s3_policy.json
 }
