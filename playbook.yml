@@ -1,51 +1,75 @@
 ---
 - hosts: all
-  become: true
-  become_method: sudo
-  become_user: root
+  become: true # this will login in with user with root
   tasks:
+# make a directory /data where we will mount the volume 
   - name: make data directory
     file:
       path: /data
       state: directory
+# create a primary partition of ebs voulme we attached
+  - name: Create a new primary partition
+    parted:
+      device: /dev/xvdf
+      number: 1
+      state: present
+# format the partition with ext4
   - name: format volume
-    command: mkfs.ext4 /dev/xvdf
+    filesystem:
+    fstype: ext4
+    dev: /dev/xvdf
+# mount volume at /data
   - name: mount formatted volume on /data
     mount:
       path: /data
       src: /dev/xvdf
       fstype: ext4
-      state: present
+      state: mounted
+# installing docker
   - name: install docker
     yum:
       name: docker
       state: latest
+# installing git
   - name: install git
     yum:
       name: git
       state: latest
+# starting docker 
   - name: ensure docker is running
     service:
       name: docker
       state: started
+# enabling docker service
   - name: enable docker deamon
     service:
       name: docker
       enabled: yes
+# pulling jenkins image from docker hun
   - name: pull jenkins image
     command: docker pull jenkins/jenkins
+# launching a new container jenkins image 
   - name: run jenkins container
     command: docker run -dit --name jenkins -u root -p 8080:8080 -v /data/:/var/jenkins_home jenkins/jenkins
+# makeing a workspace and job directory because this directory are created when we create a job,
+# but we want to bind /data/workspace/website to htdocs
   - name: make workspace directory for jenkins job
     file:
       path: /data/workspace/website
       state: directory
+# pulling httpd image from docker hub
   - name: pull httpd image
     command: docker pull httpd
+# launching a new container with httpd image
+# see below we are binding /data/worspace/website/ to htdocs
+# remember we have to create a job in jenkins with name website only
   - name: run httpd container
-    command: docker run -dit --name webserver -p 80:80 -v /data/workspace/website/:/usr/local/apache2/htdocs/ httpd 
-  - name: cat initial jenkin password
-    shell: cat initialAdminPassword
+    command: docker run -dit --name webserver -p 80:80 -v /data/workspace/website/:/usr/local/apache2/htdocs/ httpd
+# printing initailAdminPassword on terminal
+  - name: echo initial jenkin password
+    command: cat initialAdminPassword 
+    register: output
     args:
       chdir: /data/secrets/
+  - debug: var=output.stdout_lines
 
